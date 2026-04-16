@@ -11,7 +11,6 @@
 ## TODO LIST:
 
 ```c
-- Wall collisions are pretty jank
 - Make a pure C version?
 ```
 

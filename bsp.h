@@ -1,8 +1,8 @@
 // BSP Single Header File
 #pragma once
 #include <ctime>
-#include "raylib.h"
-#include "raymath.h"
+#include <raylib.h>
+#include <raymath.h>
 #include <rlgl.h>
 #include <algorithm>
 #include <filesystem>
@@ -1125,26 +1125,6 @@ struct BSP_Collider
   };
 
   /*
-  AABBSolid
-  check if aabb (axis aligned bounding box) collides with SOLID (-2) geometry
-  */
-  bool AABBSolid(Vector3 pos, Vector3 half)
-  {
-    for (int sx : {-1, 1})
-      for (int sy : {-1, 1})
-        for (int sz : {-1, 1})
-          if (IsSolid({pos.x + sx * half.x,
-                       pos.y + sy * half.y,
-                       pos.z + sz * half.z}))
-            return true;
-    return false;
-  };
-
-  // -----------------------------------------------------------------------
-  // BSP Collisions
-  // -----------------------------------------------------------------------
-
-  /*
   TraceResult
   result of a single hull-trace through the BSP clipnode tree
   */
@@ -1189,10 +1169,17 @@ struct BSP_Collider
     int near_child = side ? cn.back : cn.front;
     int far_child = side ? cn.front : cn.back;
 
-    // near frac: pushed away from the plane (so near trace stops just before it)
-    float frac = std::clamp((t1 + DIST_EPSILON) / (t1 - t2), 0.0f, 1.0f);
-    // far frac:  pushed into the plane (so far trace starts just past it)
-    float frac2 = std::clamp((t1 - DIST_EPSILON) / (t1 - t2), 0.0f, 1.0f);
+    float frac, frac2;
+    if (t1 < 0)
+    {
+      frac = std::clamp((t1 + DIST_EPSILON) / (t1 - t2), 0.0f, 1.0f);
+      frac2 = std::clamp((t1 - DIST_EPSILON) / (t1 - t2), 0.0f, 1.0f);
+    }
+    else
+    {
+      frac = std::clamp((t1 - DIST_EPSILON) / (t1 - t2), 0.0f, 1.0f);
+      frac2 = std::clamp((t1 + DIST_EPSILON) / (t1 - t2), 0.0f, 1.0f);
+    }
 
     float midf = p1f + (p2f - p1f) * frac;
     float midf2 = p1f + (p2f - p1f) * frac2;
@@ -1255,11 +1242,11 @@ struct BSP_Collider
     out.z = in.z - (normal.z * backoff);
 
     float eps = STOP_EPS * bsp_raylib_scale;
-    if (out.x > -STOP_EPS && out.x < STOP_EPS)
+    if (out.x > -eps && out.x < eps)
       out.x = 0;
-    if (out.y > -STOP_EPS && out.y < STOP_EPS)
+    if (out.y > -eps && out.y < eps)
       out.y = 0;
-    if (out.z > -STOP_EPS && out.z < STOP_EPS)
+    if (out.z > -eps && out.z < eps)
       out.z = 0;
 
     return blocked;
@@ -1325,7 +1312,7 @@ struct BSP_Collider
       return;
     }
 
-    float down_dist = 2.0f * bsp_raylib_scale;
+    float down_dist = 2.0f * bsp_raylib_scale; // step height downwards
     Vector3 point_down = {pos.x, pos.y - down_dist, pos.z};
     TraceResult tr = TraceLine(pos, point_down);
 
@@ -1508,7 +1495,7 @@ struct BSP_Collider
       for (i = 0; i < numplanes; i++)
       {
         // clip velocity against plane
-        ClipVelocity(original_velocity, planes[i], vel, 1.0f); // 1.01 helps push out
+        ClipVelocity(original_velocity, planes[i], vel, 1.01f); // 1.01 helps push out
 
         // check if hits OTHER planes
         for (j = 0; j < numplanes; j++)
@@ -1533,7 +1520,7 @@ struct BSP_Collider
         }
         Vector3 dir = Vector3CrossProduct(planes[0], planes[1]);
         float d = Vector3DotProduct(dir, vel);
-        vel = Vector3Scale(vel, d);
+        vel = Vector3Scale(dir, d);
       }
 
       if (Vector3DotProduct(vel, primal_velocity) <= 0)
@@ -1691,7 +1678,7 @@ struct BSP_Collider
   };
 
   /*
-  PlayerJump
+
   */
   void PlayerJump(Vector3 &vel, bool is_grounded)
   {
@@ -1716,6 +1703,20 @@ struct BSP_Collider
     ApplyFriction(pos, vel, is_grounded);
     AirMove(pos, vel, forward, right, fmove, smove);
     PlayerJump(vel, is_grounded);
+
+    // step-down: if we were grounded before moving, stick to the floor
+    if (is_grounded && vel.y <= 0)
+    {
+      float step = 2.0f * bsp_raylib_scale;
+      Vector3 down = {pos.x, pos.y - step, pos.z};
+      TraceResult tr = TraceLine(pos, down);
+      if (tr.fraction < 1.0f && tr.normal.y > 0.7f)
+      {
+        pos.y -= step * tr.fraction;
+        pos.y += 0.03125f * bsp_raylib_scale;
+      }
+    }
+
     CategorizePosition(pos, vel, is_grounded);
 
     return pos;
