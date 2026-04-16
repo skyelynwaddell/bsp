@@ -6,6 +6,8 @@
 - Collision & Movement Functions
 - Player Example
 
+![preview](image.png)
+
 ## TODO LIST:
 
 ```c
