@@ -13,17 +13,22 @@ inline Light cameraLight;
 inline int lightPower = 50;
 inline int LIGHT_COUNT = 0;
 
-static bool HandleMouseCursorActive()
+static bool HandleMouseCursorActive(bool menu_mode)
 {
-  static bool enable_cursor = false;
   if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT))
   {
-    if (enable_cursor = !enable_cursor)
+    if (menu_mode = !menu_mode)
+    {
+      ShowCursor();
       EnableCursor();
+    }
     else
+    {
+      HideCursor();
       DisableCursor();
+    }
   }
-  return enable_cursor;
+  return menu_mode;
 };
 
 static void Camera3D_UpdateShaders()
@@ -109,11 +114,12 @@ inline void Camera3D_Init()
   SetShaderValue(shader, GetShaderLocation(shader, "lightPower"), &lightPower, SHADER_UNIFORM_INT);
 };
 
-inline void Camera3D_Update()
+inline void Camera3D_Update(bool &menu_mode)
 {
   if (!camera)
     return;
 
+  menu_mode = HandleMouseCursorActive(menu_mode);
   Camera3D_UpdateShaders();
   cameraLight.position = camera->position;
 };

@@ -1,10 +1,23 @@
-# All in one BSP file for Raylib
-## TODO: Wall collisions are a bit jank
+# BSP Loader for Raylib
+
+- Load & Parse .BSP files
+- Render the maps, with optional PVS culling
+- Lightmap Support
+- Collision & Movement Functions
+- Player Example
+
+## TODO LIST:
+
+```c
+- Wall collisions are pretty jank
+- Make a pure C version?
+```
 
 ## Build
+
 ```bash
 # Build the example
-mkdir build-win && cd build-win
+mkdir build && cd build
 cmake -G "Ninja" ..
 ninja
 cd ..

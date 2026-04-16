@@ -6,20 +6,24 @@
 #include "rlights.h"
 
 inline std::unique_ptr<Player> player;
+inline bool menu_mode = false;
 
 /*
-Init
+main
 */
-static inline void Init()
+int main()
 {
+  // init raylib
   SetTargetFPS(60);
   SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT | FLAG_WINDOW_RESIZABLE);
   InitWindow(1200, 800, "bsp");
   SetWindowState(FLAG_WINDOW_MAXIMIZED);
   rlEnableBackfaceCulling();
 
+  // create player
   player = std::make_unique<Player>((Vector3){-50.0f, 0.0f, 5.0f});
 
+  // load map
   std::string maptoload = "dm4.bsp";
   try
   {
@@ -29,84 +33,36 @@ static inline void Init()
   {
   }
 
+  // load camera
   DisableCursor();
   Camera3D_Init();
-};
 
-/*
-Update
-*/
-static inline bool menuMode = false;
-static inline void Update()
-{
-  if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT))
-  {
-    menuMode = !menuMode;
-    if (menuMode)
-    {
-      EnableCursor();
-      ShowCursor();
-    }
-    else
-    {
-      DisableCursor();
-      HideCursor();
-    }
-  }
-  player->Update(camera.get(), menuMode);
-  Camera3D_Update();
-};
-
-/*
-Draw
-*/
-static inline void Draw()
-{
-  if (!camera)
-    return;
-
-  static bool enable_wireframe = false;
-  BeginDrawing();
-  ClearBackground(GRAY);
-  BeginMode3D(*camera);
-  BSP_Draw(shader, enable_wireframe, camera->position);
-  EndMode3D();
-};
-
-/*
-DrawGUI
-*/
-static inline void DrawGUI()
-{
-  DrawFPS(0, 0);
-  BSP_DrawDebug(camera->position);
-  EndDrawing();
-};
-
-/*
-CleanUp
-*/
-void CleanUp()
-{
-  UnloadShader(shader);
-  BSP_CleanUp();
-};
-
-/*
-main
-*/
-int main()
-{
-  Init();
-
+  // Game Loop
   while (!WindowShouldClose())
   {
-    Update();
-    Draw();
-    DrawGUI();
+    // Update
+    player->Update(camera.get(), menu_mode);
+    Camera3D_Update(menu_mode);
+
+    // Draw
+    static bool enable_wireframe = false;
+    BeginDrawing();
+    ClearBackground(GRAY);
+    BeginMode3D(*camera);
+    BSP_Draw(shader, enable_wireframe, camera->position);
+    EndMode3D();
+
+    // DrawGUI
+    DrawFPS(0, 0);
+    BSP_DrawDebug(camera->position);
+    EndDrawing();
   }
 
-  CleanUp();
+  // CleanUp
+  UnloadShader(shader);
+  BSP_CleanUp();
+
+  // shutdown
   CloseWindow();
   return 0;
 };
