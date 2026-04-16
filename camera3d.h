@@ -7,12 +7,16 @@
 #include "rlgl.h"
 
 inline std::unique_ptr<Camera> camera;
-inline long shaderModTime;
-inline Shader shader;
-inline Light cameraLight;
-inline int lightPower = 50;
+inline long shadermodtime;
+inline Shader camshader;
+inline Light camlight;
+inline int lightpower = 50;
 inline int LIGHT_COUNT = 0;
 
+/*
+HandleMouseCursorActive
+right click to free mouse , or return to game
+*/
 static bool HandleMouseCursorActive(bool menu_mode)
 {
   if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT))
@@ -31,37 +35,44 @@ static bool HandleMouseCursorActive(bool menu_mode)
   return menu_mode;
 };
 
+/*
+Camera3D_UpdateShaders
+Updates camera lighting & shaders
+*/
 static void Camera3D_UpdateShaders()
 {
   if (!camera)
     return;
 
   long currentShaderModTime = std::max(GetFileModTime(VS_PATH), GetFileModTime(FS_PATH));
-  if (currentShaderModTime != shaderModTime)
+  if (currentShaderModTime != shadermodtime)
   {
     Shader updatedShader = LoadShader(VS_PATH, FS_PATH);
     if (updatedShader.id != rlGetShaderIdDefault()) // It was correctly loaded
     {
-      UnloadShader(shader);
-      shader = updatedShader;
-      shader.locs[SHADER_LOC_VECTOR_VIEW] = GetShaderLocation(shader, "viewPos");
+      UnloadShader(camshader);
+      camshader = updatedShader;
+      camshader.locs[SHADER_LOC_VECTOR_VIEW] = GetShaderLocation(camshader, "viewPos");
 
       LIGHT_COUNT = 0;
-      cameraLight = CreateLight(LIGHT_POINT, camera->position, {}, WHITE, shader);
-      SetShaderValue(shader, GetShaderLocation(shader, "lightPower"), &lightPower, SHADER_UNIFORM_INT);
+      camlight = CreateLight(LIGHT_POINT, camera->position, {}, WHITE, camshader);
+      SetShaderValue(camshader, GetShaderLocation(camshader, "lightPower"), &lightpower, SHADER_UNIFORM_INT);
     }
 
-    shaderModTime = currentShaderModTime;
+    shadermodtime = currentShaderModTime;
   }
 };
 
-inline void Camera3D_Move(Camera &camera, bool enabled)
+/*
+Camera3D_Move
+Used for free Spectator mode
+*/
+static void Camera3D_Move(Camera &camera, bool enabled)
 {
   if (!enabled)
     return;
 
   float speed = 10.0f * GetFrameTime();
-
   Vector3 forward = Vector3Normalize(Vector3Subtract(camera.target, camera.position));
   Vector3 right = Vector3Normalize(Vector3CrossProduct(forward, camera.up));
 
@@ -80,9 +91,7 @@ inline void Camera3D_Move(Camera &camera, bool enabled)
 
   Vector2 mouseDelta = GetMouseDelta();
   float sensitivity = 0.003f;
-
-  static float yaw = 0.0f;
-  static float pitch = 0.0f;
+  static float yaw, pitch = 0.0f;
 
   yaw += mouseDelta.x * sensitivity;
   pitch -= mouseDelta.y * sensitivity;
@@ -97,11 +106,15 @@ inline void Camera3D_Move(Camera &camera, bool enabled)
   camera.target = Vector3Add(camera.position, direction);
 };
 
+/*
+Camera3D_Init
+inits the 3d game camera and stats
+*/
 inline void Camera3D_Init()
 {
-  shaderModTime = std::max(GetFileModTime(VS_PATH), GetFileModTime(FS_PATH));
-  shader = LoadShader(VS_PATH, FS_PATH);
-  shader.locs[SHADER_LOC_VECTOR_VIEW] = GetShaderLocation(shader, "viewPos");
+  shadermodtime = std::max(GetFileModTime(VS_PATH), GetFileModTime(FS_PATH));
+  camshader = LoadShader(VS_PATH, FS_PATH);
+  camshader.locs[SHADER_LOC_VECTOR_VIEW] = GetShaderLocation(camshader, "viewPos");
 
   camera = std::make_unique<Camera>(Camera{
       .position = {10.0f, 10.0f, 10.0f},
@@ -110,10 +123,14 @@ inline void Camera3D_Init()
       .fovy = 90.0f,
       .projection = CAMERA_PERSPECTIVE});
 
-  cameraLight = CreateLight(LIGHT_POINT, camera->position, {}, WHITE, shader);
-  SetShaderValue(shader, GetShaderLocation(shader, "lightPower"), &lightPower, SHADER_UNIFORM_INT);
+  camlight = CreateLight(LIGHT_POINT, camera->position, {}, WHITE, camshader);
+  SetShaderValue(camshader, GetShaderLocation(camshader, "lightPower"), &lightpower, SHADER_UNIFORM_INT);
 };
 
+/*
+Camera3D_Update
+updates the camera pos & data every tick
+*/
 inline void Camera3D_Update(bool &menu_mode)
 {
   if (!camera)
@@ -121,5 +138,5 @@ inline void Camera3D_Update(bool &menu_mode)
 
   menu_mode = HandleMouseCursorActive(menu_mode);
   Camera3D_UpdateShaders();
-  cameraLight.position = camera->position;
+  camlight.position = camera->position;
 };

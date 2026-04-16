@@ -49,7 +49,7 @@ int main()
     BeginDrawing();
     ClearBackground(GRAY);
     BeginMode3D(*camera);
-    BSP_Draw(shader, enable_wireframe, camera->position);
+    BSP_Draw(camshader, enable_wireframe, camera->position);
     EndMode3D();
 
     // DrawGUI
@@ -59,7 +59,7 @@ int main()
   }
 
   // CleanUp
-  UnloadShader(shader);
+  UnloadShader(camshader);
   BSP_CleanUp();
 
   // shutdown

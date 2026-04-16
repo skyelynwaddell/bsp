@@ -28,26 +28,20 @@ public:
 
     /*
     Player Update
+    called every frame, player update event
     */
     void Update(Camera3D *camera, bool menu_mode)
     {
-        float dt = GetFrameTime();
-
         if (!menu_mode)
-            HandleRotation(dt);
+            HandleRotation(GetFrameTime());
 
         Vector3 forward = {sinf(yaw), 0.f, -cosf(yaw)};
         Vector3 right = {cosf(yaw), 0.f, sinf(yaw)};
 
-        float fmove = 0.0f;
-        float smove = 0.0f;
+        float fmove, smove = 0.0f; // forward & side move
 
         if (!menu_mode)
             GetInput(fmove, smove);
-
-        bool grounded = bsp_collider.IsGrounded();
-        if (grounded && (IsKeyPressed(KEY_SPACE) || IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_DOWN)))
-            velocity.y = jump_height;
 
         position = bsp_collider.MoveAndSlide(position, velocity, forward, right, fmove, smove);
 
@@ -56,23 +50,24 @@ public:
 
     /*
     HandleRotation
+    handles mouse yaw and pitch
     */
     void HandleRotation(float dt)
     {
-        Vector2 mouseDelta = GetMouseDelta();
-        yaw += mouseDelta.x * mouse_sensitivity;
-        pitch -= mouseDelta.y * mouse_sensitivity;
+        Vector2 mouse_delta = GetMouseDelta();
+        yaw += mouse_delta.x * mouse_sensitivity;
+        pitch -= mouse_delta.y * mouse_sensitivity;
 
         if (IsGamepadAvailable(0))
         {
             const float deadzone = 0.15f;
-            float stickX = GetGamepadAxisMovement(0, GAMEPAD_AXIS_RIGHT_X);
-            float stickY = GetGamepadAxisMovement(0, GAMEPAD_AXIS_RIGHT_Y);
+            float stick_x = GetGamepadAxisMovement(0, GAMEPAD_AXIS_RIGHT_X);
+            float stick_y = GetGamepadAxisMovement(0, GAMEPAD_AXIS_RIGHT_Y);
 
-            if (fabsf(stickX) > deadzone)
-                yaw += stickX * mouse_sensitivity * gamepad_sensitivity * 100.0f * dt;
-            if (fabsf(stickY) > deadzone)
-                pitch -= stickY * mouse_sensitivity * gamepad_sensitivity * 100.0f * dt;
+            if (fabsf(stick_x) > deadzone)
+                yaw += stick_x * mouse_sensitivity * gamepad_sensitivity * 100.0f * dt;
+            if (fabsf(stick_y) > deadzone)
+                pitch -= stick_y * mouse_sensitivity * gamepad_sensitivity * 100.0f * dt;
         }
 
         pitch = Clamp(pitch, -pitch_limit, pitch_limit);
@@ -80,6 +75,7 @@ public:
 
     /*
     GetInput
+    handles directional input of player
     */
     void GetInput(float &fmove, float &smove)
     {
@@ -115,17 +111,18 @@ public:
 
     /*
     Update Camera
+    updates camera position, yaw, and pitch
     */
     void UpdateCamera(Camera3D *camera)
     {
         if (!camera)
             return;
 
-        Vector3 viewDir = {
+        Vector3 viewdir = {
             sinf(yaw),
             tanf(pitch),
             -cosf(yaw)};
         camera->position = (Vector3){position.x, position.y + 0.5f, position.z};
-        camera->target = Vector3Add(camera->position, viewDir);
+        camera->target = Vector3Add(camera->position, viewdir);
     };
 };
