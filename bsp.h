@@ -343,11 +343,11 @@ FromQuake
 Converts .bsp xyz coords to raylib coords
 */
 inline float bsp_raylib_scale = 0.05f;
-static inline Vector3 FromQuake(Vector3 quakeVec)
+inline Vector3 FromQuake(Vector3 quakeVec)
 {
   return Vector3Scale({quakeVec.y, quakeVec.z, quakeVec.x}, bsp_raylib_scale);
 };
-static inline Vector3 ToQuake(Vector3 rl)
+inline Vector3 ToQuake(Vector3 rl)
 {
   return {rl.z / bsp_raylib_scale, rl.x / bsp_raylib_scale, rl.y / bsp_raylib_scale};
 };
@@ -356,6 +356,7 @@ static inline Vector3 ToQuake(Vector3 rl)
 BSP_File
 Wraps the raw BSP file stream and provides typed accessors for every data lump.
 */
+static inline std::vector<uint8_t> lightmap_lump;
 struct BSP_File
 {
   std::istream &bsp_file;
@@ -367,6 +368,10 @@ struct BSP_File
       throw std::runtime_error("Failed to open file");
 
     header = ReadT<Header>(bsp_file);
+
+    bsp_file.seekg(header.lightmaps.offset);
+    lightmap_lump.resize(header.lightmaps.size);
+    bsp_file.read((char *)lightmap_lump.data(), header.lightmaps.size);
   }
 
   template <typename T>
@@ -462,7 +467,7 @@ struct BSP_File
   face_lightmap_extents
   Computes the lightmap patch dimensions for a single face.
   */
-  FaceLightmapExtents face_lightmap_extents(const Face &face)
+  inline FaceLightmapExtents face_lightmap_extents(const Face &face)
   {
     TexInfo info = texinfo(face.texinfo_id);
     float min_s = FLT_MAX, max_s = -FLT_MAX;
@@ -497,18 +502,14 @@ struct BSP_File
   Reads the raw 8-bit greyscale lightmap patch for a face out of the lightmap lump.
   Returns a full-bright patch if the face has no lightmap data (sky, triggers, etc.).
   */
-  std::vector<uint8_t> face_lightmap_bytes(const Face &face, const FaceLightmapExtents &ext)
+  inline std::vector<uint8_t> face_lightmap_bytes(const Face &face, const FaceLightmapExtents &ext)
   {
     int count = ext.width * ext.height;
-    // 0xFFFFFFFF means "no lightmap" (fullbright / sky / liquid)
     if (face.lightmap == 0xFFFFFFFF || header.lightmaps.size == 0 || count <= 0)
       return std::vector<uint8_t>(count, 255);
 
-    bsp_file.clear();
-    bsp_file.seekg(header.lightmaps.offset + (std::streamoff)face.lightmap);
-    std::vector<uint8_t> data(count);
-    bsp_file.read((char *)data.data(), count);
-    return data;
+    auto begin = lightmap_lump.begin() + face.lightmap;
+    return std::vector<uint8_t>(begin, begin + count);
   }
 };
 
@@ -1258,20 +1259,8 @@ struct BSP_Collider
   */
   void NudgePosition(Vector3 &player_pos)
   {
-    // // only nudge if actually stuck
-    // if (!IsSolid(player_pos))
-    //   return;
-
-    // // try upward escape first with increasing steps
-    // for (int i = 1; i <= 8; i++)
-    // {
-    //   Vector3 test = {player_pos.x, player_pos.y + i * 0.125f * bsp_raylib_scale, player_pos.z};
-    //   if (!IsSolid(test))
-    //   {
-    //     player_pos = test;
-    //     return;
-    //   }
-    // }
+    if (!IsSolid(player_pos))
+      return;
 
     // small nudge distance — just enough to escape the surface
     const float nudge = 0.125f * bsp_raylib_scale;
@@ -1459,8 +1448,8 @@ struct BSP_Collider
 
       if (tr.started_solid)
       {
-        vel = {0, 0, 0};
-        break;
+        tr.fraction = 0;
+        // vel = {0, 0, 0};
       }
 
       if (tr.fraction > 0)
@@ -1469,6 +1458,7 @@ struct BSP_Collider
         if (move_frac < 0)
           move_frac = 0;
         pos = Vector3Add(pos, Vector3Scale(vel, time_left * move_frac));
+        original_velocity = vel;
         numplanes = 0;
       }
 
@@ -1495,7 +1485,8 @@ struct BSP_Collider
       for (i = 0; i < numplanes; i++)
       {
         // clip velocity against plane
-        ClipVelocity(original_velocity, planes[i], vel, 1.01f); // 1.01 helps push out
+        float bounce = (planes[i].y > 0.7f) ? 1.0f : 1.01f;
+        ClipVelocity(original_velocity, planes[i], vel, bounce); // 1.01 helps push out of walls and not get snagged
 
         // check if hits OTHER planes
         for (j = 0; j < numplanes; j++)
@@ -1543,7 +1534,7 @@ struct BSP_Collider
     if (vel.y < 0)
       vel.y = 0;
 
-    float step_height = 19.f * bsp_raylib_scale; // 18.0f * bsp_raylib_scale;
+    float step_height = 18.f * bsp_raylib_scale;
 
     // try just moving to final dest
     Vector3 direct_dest = {
@@ -1685,7 +1676,21 @@ struct BSP_Collider
     if (is_grounded && (IsKeyPressed(KEY_SPACE) || IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_DOWN)))
     {
       vel.y = 270.0f * bsp_raylib_scale;
-      printf("JUMP! vel.y = %.2f, grounded = %d\n", vel.y, is_grounded);
+    }
+  };
+
+  void StepDown(Vector3 &pos, Vector3 vel, bool is_grounded)
+  {
+    if (is_grounded && vel.y <= 0)
+    {
+      float step = 18.0f * bsp_raylib_scale;
+      Vector3 down = {pos.x, pos.y - step, pos.z};
+      TraceResult tr = TraceLine(pos, down);
+      if (tr.fraction < 1.0f && tr.normal.y > 0.7f)
+      {
+        pos.y -= step * tr.fraction;
+        pos.y += 0.03125f * bsp_raylib_scale;
+      }
     }
   };
 
@@ -1703,20 +1708,7 @@ struct BSP_Collider
     ApplyFriction(pos, vel, is_grounded);
     AirMove(pos, vel, forward, right, fmove, smove);
     PlayerJump(vel, is_grounded);
-
-    // step-down: if we were grounded before moving, stick to the floor
-    if (is_grounded && vel.y <= 0)
-    {
-      float step = 2.0f * bsp_raylib_scale;
-      Vector3 down = {pos.x, pos.y - step, pos.z};
-      TraceResult tr = TraceLine(pos, down);
-      if (tr.fraction < 1.0f && tr.normal.y > 0.7f)
-      {
-        pos.y -= step * tr.fraction;
-        pos.y += 0.03125f * bsp_raylib_scale;
-      }
-    }
-
+    StepDown(pos, vel, is_grounded);
     CategorizePosition(pos, vel, is_grounded);
 
     return pos;
